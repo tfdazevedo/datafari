@@ -25,6 +25,8 @@ export CASSANDRA_ENV=$CASSANDRA_HOME/bin/cassandra.in.sh
 export ELASTICSEARCH_HOME=$DATAFARI_HOME/elk/elasticsearch
 export LOGSTASH_HOME=$DATAFARI_HOME/elk/logstash
 export KIBANA_HOME=$DATAFARI_HOME/elk/kibana
+# Logs directory: needed for Cassandra startup
+export DATAFARI_LOGS=$DATAFARI_HOME/logs
 
 # pid files 
 export MCF_PID_FILE=$PID_DIR/mcf_crawler_agent.pid

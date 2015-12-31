@@ -45,7 +45,32 @@ then
 	mkdir "${DATAFARI_HOME}/pgsql/data"
 	rm -rf "${DATAFARI_HOME}/cassandra/data"
 	mkdir "${DATAFARI_HOME}/cassandra/data"
-	CASSANDRA_INCLUDE=$CASSANDRA_ENV $CASSANDRA_HOME/bin/cassandra -p $CASSANDRA_PID_FILE 1>/dev/null
+
+	CASSANDRA_INCLUDE=$CASSANDRA_ENV 
+
+	# Redirect stdout and stderr to logs file to ease startup issues investigation
+	$CASSANDRA_HOME/bin/cassandra -p $CASSANDRA_PID_FILE 1>$DATAFARI_LOGS/cassandra-startup.log 2>&1
+	# Note: Cassandra start command returns 0 even if something goes wrong at startup. This is why hereafter we check pid and exceptions in log file.
+
+	# Get the process ID assigned to Cassandra
+	pid=$(head -n 1 $CASSANDRA_PID_FILE)
+
+	# Check if Cassandra process is running
+	cassandra_process=$(ps -Alf | grep $pid | grep org.apache.cassandra.service.CassandraDaemon)
+
+	if [ -z "$cassandra_process" ]; then
+		echo "/!\ ERROR: Cassandra process is not running."
+	else
+		echo "Cassandra process running with PID ${pid} --- OK"
+	fi
+
+	# Check if Cassandra startup log contains some exceptions
+	cassandra_errors=$(cat $DATAFARI_LOGS/cassandra-startup.log | grep "Exception: ")
+
+	if [ -z "$cassandra_errors" ]; then
+		echo "/!\ ERROR: Cassandra startup has generated exceptions. Trying to start CQLSH anyway..."
+	fi
+
 	id -u postgres &>/dev/null || useradd postgres
 	chown -R postgres "${DATAFARI_HOME}/pgsql"
 	chmod -R 777 "${DATAFARI_HOME}/logs"
@@ -55,7 +80,33 @@ then
 	su postgres -c "${DATAFARI_HOME}/pgsql/bin/pg_ctl -D ${DATAFARI_HOME}/pgsql/data -l ${DATAFARI_HOME}/logs/pgsql.log start"
 	cd "${DATAFARI_HOME}/mcf/mcf_home"
 	bash "initialize.sh"
-	$CASSANDRA_HOME/bin/cqlsh -f ${DATAFARI_HOME}/bin/common/config/cassandra/tables 
+
+	# Ping Cassandra to see if it is up and running
+	# telnet_return=$(telnet 127.0.0.1 9042), better use the cqlsh command
+
+	$CASSANDRA_HOME/bin/cqlsh -f ${DATAFARI_HOME}/bin/common/config/cassandra/tables
+	cqlsh_return=$?
+
+	retries=1
+    while (( retries < 6 && cqlsh_return != 0 )); do
+		echo "Cassandra doesn't reply to requests on port 9042. Sleeping for a while and trying again... retry ${retries}"
+
+		# Sleep for a while
+        sleep 2s
+		
+		# Try again to connect to Cassandra
+		$CASSANDRA_HOME/bin/cqlsh -f ${DATAFARI_HOME}/bin/common/config/cassandra/tables
+		cqlsh_return=$?
+
+		let "retries++"
+    done
+
+	if [ $cqlsh_return -ne 0 ]; then	
+
+		echo "/!\ ERROR: Cassandra startup has ended with errors; please check log file ${DATAFARI_LOGS}/cassandra-startup.log"
+	else
+        echo "Cassandra startup completed successfully --- OK"
+	fi
 fi
 
 cd $TOMCAT_HOME/bin
