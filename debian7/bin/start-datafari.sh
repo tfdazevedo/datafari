@@ -64,12 +64,16 @@ then
 		echo "Cassandra process running with PID ${pid} --- OK"
 	fi
 
-	# Check if Cassandra startup log contains some exceptions
-	cassandra_errors=$(cat $DATAFARI_LOGS/cassandra-startup.log | grep "Exception: ")
+	# TODO Check if Cassandra startup log contains some exceptions. 
+	# Cannot be done with grep or cat or head as the log file is "live" and empty at this point.
+	
+	# cassandra_errors=$(grep "Exception: " $DATAFARI_LOGS/cassandra-startup.log)
 
-	if [ -z "$cassandra_errors" ]; then
-		echo "/!\ ERROR: Cassandra startup has generated exceptions. Trying to start CQLSH anyway..."
-	fi
+	# if [ ! -z "$cassandra_errors" ]; then
+	#	echo "/!\ ERROR: Cassandra startup has generated exceptions. Trying to start CQLSH anyway..."
+	# else
+    #   echo "No Cassandra exceptions have been detected --- OK"
+	# fi
 
 	id -u postgres &>/dev/null || useradd postgres
 	chown -R postgres "${DATAFARI_HOME}/pgsql"
